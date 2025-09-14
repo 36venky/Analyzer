@@ -65,6 +65,7 @@ def analyze_real_time(ticker):
 
         last_candle_time = ha_df.index[-1].to_pydatetime()
         now = datetime.now(last_candle_time.tzinfo)
+
         # If last candle timestamp is "future" relative to now → use -2
         if last_candle_time > now:
             i = -2   # last completed candle
@@ -79,39 +80,40 @@ def analyze_real_time(ticker):
         except IndexError:
             logging.error(f"[{ticker}] Not enough candles for angle calculation.")
             return
-        
-        def get_rsi(data, length=14):
-            delta = data['Close'].diff()
-            gain = delta.clip(lower=0)
-            loss = -delta.clip(upper=0)
-            avg_gain = gain.ewm(alpha=1/length, min_periods=length).mean()
-            avg_loss = loss.ewm(alpha=1/length, min_periods=length).mean()
-            rs = avg_gain / avg_loss
-            rsi = 100 - (100 / (1 + rs))
-            return rsi
+        if data.empty or "Volume" not in data.columns:
+            logging.warning(f"[{ticker}] No volume data available")
 
-        data['RSI'] = get_rsi(data, length=14)
-        x = data['RSI'].iloc[i]
-        
-        if 60 <= x  and x <= 71:
-            Rsi = True
-        else:
-            Rsi = False
+        data = data[~data.index.duplicated(keep="last")]
+        data["VMA_5"] = data["Volume"].rolling(window=5).mean()
+        latest_volume = data["Volume"].iloc[-1]
+        latest_vma5 = data["VMA_5"].iloc[-1]
+
+        if hasattr(latest_volume, "item"):
+            latest_volume = latest_volume.item()
+        if hasattr(latest_vma5, "item"):
+            latest_vma5 = latest_vma5.item()
+
+        if pd.notnull(latest_volume) and pd.notnull(latest_vma5):
+            if latest_volume >= 2 * latest_vma5:
+                Vol = True
+            else:
+                #logging.info(f"[{ticker}] No volume breakout: Volume={latest_volume}, VMA_5={latest_vma5}")
+                Vol = False
             
 
         threshold = TA.Angle.get_angle_threshold(signal_price)
         strong_green = ha_df['Close'].iloc[i-1] > ha_df['Open'].iloc[i-1] and ha_df['Open'].iloc[i-1] == ha_df['Low'].iloc[i-1]
-        can_buy = strong_green and angle >= threshold and Rsi
+        can_buy = strong_green and angle >= threshold 
 
         if ticker not in buy_triggered:
             buy_triggered[ticker] = False
 
-        if can_buy and not buy_triggered[ticker] :
+        if can_buy and not buy_triggered[ticker] and Vol:
             signal_time = ha_df.index[i].strftime('%Y-%m-%d %H:%M')
             current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             with open("buy_tickers.txt", "a") as f:
-                f.write(f"{ticker},{signal_price:.2f},{signal_time},{current_time_str}\n")
+                f.write(f"{ticker},{signal_price:.2f},{signal_time},{current_time_str},{i}\n")
         
             buy_triggered[ticker] = True
         else:
@@ -127,7 +129,7 @@ def analyze_real_time(ticker):
         open("buy_tickers.txt", "w").close()
 
 # --- Utility ---
-def wait_until_next_15_min(buffer_seconds=5):
+def wait_until_next_15_min(buffer_seconds=0):
     now = datetime.now()
     #V.is_volume_breakout()
     # Get to the next 15-minute boundary
