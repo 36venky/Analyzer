@@ -62,15 +62,8 @@ def analyze_real_time(ticker):
         ha_df['Low'] = pd.concat([df['Low'], ha_df['Open'], ha_df['Close']], axis=1).min(axis=1)
 
         ema9 = ha_df['Close'].ewm(span=9, adjust=False).mean()
-
-        last_candle_time = ha_df.index[-1].to_pydatetime()
-        now = datetime.now(last_candle_time.tzinfo)
-
-        # If last candle timestamp is "future" relative to now → use -2
-        if last_candle_time > now:
-            i = -2   # last completed candle
-        else:
-            i = -1   # forming candle
+        
+        i = -1   # forming candle
 
         signal_price = ha_df['Close'].iloc[i]
 
@@ -155,3 +148,4 @@ def wait_until_next_1_min():
 #ps aux | grep python3
 #kill  PID
 #pkill -f python'''
+
