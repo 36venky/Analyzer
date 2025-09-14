@@ -1,0 +1,11 @@
+import Aanlyze_Sleep as AS
+import Excel1 as EX
+import logging
+
+tickers = EX.Price.list(50, 60)
+tickers = [t + '.NS' for t in tickers]
+
+while True:
+    for ticker in tickers:
+        AS.analyze_real_time(ticker)
+    AS.wait_until_next_15_min()
